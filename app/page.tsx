@@ -1,97 +1,48 @@
-'use client';
-
-import { useEffect, useState } from 'react';
-import { useApp } from '@/store/useApp';
-import MemoryInspector from '@/components/MemoryInspector';
-import MemoryTester from '@/components/MemoryTester';
-import McpGuide from '@/components/McpGuide';
-import SettingsPanel from '@/components/SettingsPanel';
-
-type Tab = 'memory' | 'tester' | 'mcp' | 'settings';
-
-function AppContent() {
-  const phase = useApp((s) => s.phase);
-  const boot = useApp((s) => s.boot);
-  const [tab, setTab] = useState<Tab>('memory');
-
-  useEffect(() => {
-    void boot();
-  }, [boot]);
-
-  if (phase === 'boot') {
-    return (
-      <div className="py-24 flex flex-col items-center justify-center gap-3">
-        <div className="flex items-center gap-2 text-xs font-mono text-[#555]">
-          <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
-          <span>INITIALIZING ZERO-MEM...</span>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="py-8 space-y-6">
-      {/* Subnav for Zero-Mem Modules */}
-      <div className="flex items-center justify-between border-b border-[#1a1a1a] pb-3">
-        <div className="flex items-center gap-1 font-mono text-xs">
-          <button
-            onClick={() => setTab('memory')}
-            className={`px-3 py-1.5 transition-colors cursor-pointer ${
-              tab === 'memory' ? 'bg-[#111] text-white border-b-2 border-white' : 'text-[#666] hover:text-[#aaa]'
-            }`}
-          >
-            01 / memory
-          </button>
-          <button
-            onClick={() => setTab('tester')}
-            className={`px-3 py-1.5 transition-colors cursor-pointer ${
-              tab === 'tester' ? 'bg-[#111] text-white border-b-2 border-white' : 'text-[#666] hover:text-[#aaa]'
-            }`}
-          >
-            02 / tester
-          </button>
-          <button
-            onClick={() => setTab('mcp')}
-            className={`px-3 py-1.5 transition-colors cursor-pointer ${
-              tab === 'mcp' ? 'bg-[#111] text-white border-b-2 border-white' : 'text-[#666] hover:text-[#aaa]'
-            }`}
-          >
-            03 / universal
-          </button>
-          <button
-            onClick={() => setTab('settings')}
-            className={`px-3 py-1.5 transition-colors cursor-pointer ${
-              tab === 'settings' ? 'bg-[#111] text-white border-b-2 border-white' : 'text-[#666] hover:text-[#aaa]'
-            }`}
-          >
-            04 / sync
-          </button>
-        </div>
-
-        <span className="text-[10px] text-[#444] font-mono hidden sm:inline">
-          1-read ram-first engine
-        </span>
-      </div>
-
-      {/* Main Tab Panels */}
-      {tab === 'memory' && <MemoryInspector />}
-      {tab === 'tester' && <MemoryTester />}
-      {tab === 'mcp' && <McpGuide />}
-      {tab === 'settings' && <SettingsPanel />}
-    </div>
-  );
-}
+import Link from 'next/link';
 
 export default function Home() {
-  const [mounted, setMounted] = useState(false);
+  return (
+    <div className="py-20">
+      <div className="mb-16">
+        <h1 className="text-2xl font-medium tracking-tight text-white mb-3">void</h1>
+        <p className="text-[#555] text-sm max-w-md leading-relaxed">
+          Anonymous forum. No names, no traces. Share markdown files, send encrypted messages. Your identity is a 15-character code.
+        </p>
+      </div>
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+      <div className="space-y-px">
+        <div className="border border-[#1a1a1a] p-5">
+          <p className="text-xs text-[#555] mb-1">01</p>
+          <p className="text-sm text-[#ccc]">Register with a password. Receive a random 15-char ID.</p>
+        </div>
+        <div className="border border-[#1a1a1a] border-t-0 p-5">
+          <p className="text-xs text-[#555] mb-1">02</p>
+          <p className="text-sm text-[#ccc]">Post markdown files to the forum. Optional password protection.</p>
+        </div>
+        <div className="border border-[#1a1a1a] border-t-0 p-5">
+          <p className="text-xs text-[#555] mb-1">03</p>
+          <p className="text-sm text-[#ccc]">Message anyone by their ID. Identity partially masked in chat.</p>
+        </div>
+        <div className="border border-[#1a1a1a] border-t-0 p-5">
+          <p className="text-xs text-[#555] mb-1">04</p>
+          <p className="text-sm text-[#ccc]">Share .md files directly in private messages.</p>
+        </div>
+      </div>
 
-  if (!mounted) {
-    return <div className="py-24 text-xs text-[#555] text-center" suppressHydrationWarning>loading...</div>;
-  }
-
-  return <AppContent />;
+      <div className="mt-10 flex gap-3">
+        <Link
+          href="/register"
+          className="inline-block bg-white text-black text-xs font-medium px-5 py-2.5 hover:opacity-90 transition-opacity"
+        >
+          Register
+        </Link>
+        <Link
+          href="/login"
+          className="inline-block border border-[#333] text-xs px-5 py-2.5 text-[#888] hover:text-white hover:border-[#555] transition-all"
+        >
+          Login
+        </Link>
+      </div>
+    </div>
+  );
 }

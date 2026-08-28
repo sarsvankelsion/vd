@@ -36,10 +36,6 @@ export default function Navbar() {
             msg
           </Link>
           <span className="text-[#1a1a1a] mx-1">/</span>
-          <Link href="/?tab=memory" className={`nav-link ${pathname === '/' ? 'text-white' : ''}`}>
-            zero-mem
-          </Link>
-          <span className="text-[#1a1a1a] mx-1">/</span>
           {userId ? (
             <button
               onClick={handleLogout}
