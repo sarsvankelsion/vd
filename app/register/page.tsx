@@ -68,7 +68,7 @@ export default function Register() {
     return (
       <div className="py-20 max-w-md">
         <p className="text-xs text-[#555] mb-4 uppercase tracking-widest">account created</p>
-        <div className="border border-[#1a1a1a] p-5 mb-4 bg-[#050505]">
+        <div className="border border-[#1a1a1a] p-5 mb-4 bg-[#080808]">
           <p className="text-xs text-[#555] mb-2">your id (save this)</p>
           <p className="text-lg font-mono text-white tracking-wider select-all">{result.userId}</p>
         </div>
@@ -104,13 +104,15 @@ export default function Register() {
 
       <form onSubmit={handleRegister} className="space-y-3">
         <div>
+          <label className="text-[10px] text-[#555] uppercase tracking-wider block mb-1">Password</label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="password"
+            placeholder="enter password"
             required
             minLength={4}
+            className="w-full bg-[#0a0a0a] border border-[#1a1a1a] p-2.5 text-xs text-white placeholder-[#444] focus:border-[#555] outline-none transition-colors"
           />
           {password && (
             <>
@@ -135,28 +137,32 @@ export default function Register() {
           )}
         </div>
 
-        <input
-          type="password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          placeholder="confirm password"
-          required
-        />
+        <div>
+          <label className="text-[10px] text-[#555] uppercase tracking-wider block mb-1">Confirm Password</label>
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="confirm password"
+            required
+            className="w-full bg-[#0a0a0a] border border-[#1a1a1a] p-2.5 text-xs text-white placeholder-[#444] focus:border-[#555] outline-none transition-colors"
+          />
+        </div>
 
-        {error && <p className="text-xs text-[#aa3333]">{error}</p>}
+        {error && <p className="text-xs text-[#aa3333] pt-1">{error}</p>}
 
         <button
           type="submit"
           disabled={loading || strength.level < 2}
-          className="primary w-full cursor-pointer mt-2"
+          className="w-full bg-white text-black text-xs font-medium py-2.5 hover:opacity-90 transition-opacity disabled:opacity-30 cursor-pointer mt-2"
         >
-          {loading ? '...' : 'create account'}
+          {loading ? 'generating id...' : 'create account'}
         </button>
       </form>
 
       <p className="text-xs text-[#555] mt-6">
         Already have an ID?{' '}
-        <Link href="/login" className="text-[#888] hover:text-white">
+        <Link href="/login" className="text-[#888] hover:text-white transition-colors">
           login
         </Link>
       </p>
