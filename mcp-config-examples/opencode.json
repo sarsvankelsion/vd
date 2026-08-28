@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "zero-mem": {
+      "type": "local",
+      "command": ["node", "--experimental-strip-types", "C:/Users/Admin/.openclaw-autoclaw/workspace/zero-mem-agent/mcp-server/index.ts"],
+      "environment": {
+        "ZERO_MEM_NAMESPACE": "opencode-myproject",
+        "ZERO_MEM_DATA_DIR": "C:/Users/Admin/.openclaw-autoclaw/workspace/zero-mem-agent/zero-mem-data"
+      },
+      "enabled": true
+    }
+  }
+}

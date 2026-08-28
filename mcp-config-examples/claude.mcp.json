@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "zero-mem": {
+      "command": "node",
+      "args": ["--experimental-strip-types", "C:/Users/Admin/.openclaw-autoclaw/workspace/zero-mem-agent/mcp-server/index.ts"],
+      "env": {
+        "ZERO_MEM_NAMESPACE": "claude-myproject",
+        "ZERO_MEM_DATA_DIR": "C:/Users/Admin/.openclaw-autoclaw/workspace/zero-mem-agent/zero-mem-data"
+      }
+    }
+  }
+}

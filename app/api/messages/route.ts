@@ -25,7 +25,6 @@ export async function GET(req: NextRequest) {
     const currentUserId = decoded.userId.toUpperCase();
 
     if (!peerId) {
-      // Return list of conversation partners
       const peers = new Set<string>();
       for (const m of messages) {
         if (m.fromId === currentUserId) peers.add(m.toId);
@@ -34,7 +33,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ peers: Array.from(peers) });
     }
 
-    // Return conversation between current user and peerId
     const chat = messages.filter(
       (m) =>
         (m.fromId === currentUserId && m.toId === peerId) ||

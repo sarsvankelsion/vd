@@ -199,7 +199,7 @@ function MessagesContent() {
                               {m.fileContent && (
                                 <button
                                   onClick={() => downloadFile(m.fileName!, m.fileContent!)}
-                                  className="text-[10px] border border-[#333] px-2 py-0.5 text-[#888] hover:text-white"
+                                  className="text-[10px] border border-[#333] px-2 py-0.5 text-[#888] hover:text-white cursor-pointer"
                                 >
                                   download
                                 </button>
@@ -225,7 +225,7 @@ function MessagesContent() {
                     <button
                       type="button"
                       onClick={() => setFileAttachment(null)}
-                      className="text-red-400 hover:text-red-300 ml-2"
+                      className="text-red-400 hover:text-red-300 ml-2 cursor-pointer"
                     >
                       remove
                     </button>
@@ -256,7 +256,7 @@ function MessagesContent() {
                       }}
                     />
                   </label>
-                  <button type="submit" className="primary px-4">
+                  <button type="submit" className="primary px-4 cursor-pointer">
                     Send
                   </button>
                 </div>
