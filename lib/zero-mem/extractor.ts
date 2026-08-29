@@ -6,8 +6,8 @@
  *
  * Tính năng chính:
  * 1. Nhận diện và bỏ qua câu hỏi (Interrogative filter) -> Tránh 100% entity rác từ câu hỏi.
- * 2. Tách đa thực thể (Multi-entity extraction) trong cùng 1 câu (ví dụ: "dùng Next.js, Tailwind và PostgreSQL").
- * 3. Phân loại thực thể chính xác theo giá trị (tránh gán nhầm topic chéo).
+ * 2. Tách đa thực thể (Multi-entity extraction) trong cùng 1 câu.
+ * 3. Trích xuất mục tiêu dự án (Goals / Tasks: "làm game tetris...", "viết app chat...").
  * 4. Xử lý sạch các từ đệm, liên từ (và, thêm, cùng với, and, with,...).
  */
 
@@ -27,7 +27,6 @@ export interface ExtractedEntity {
   confidence: number;
   extractedAt: number;
   sourceMsgId?: string;
-  /** Đánh dấu nếu là hành động thay thế (vd: chuyển từ A sang B) */
   replacesEntity?: string;
 }
 
@@ -118,7 +117,6 @@ function toSnakeCase(s: string): string {
     .slice(0, 40);
 }
 
-/** Tách chuỗi có nhiều công nghệ phân tách bằng dấu phẩy, "và", "and", "cùng với" */
 function splitMultiItems(text: string): string[] {
   return text
     .split(/(?:,|\s+và\s+|\s+and\s+|\s+cùng\s+với\s+|\s+kèm\s+theo\s+|\s+with\s+)/i)
@@ -131,10 +129,6 @@ function splitMultiItems(text: string): string[] {
 /* ------------------------------------------------------------------ */
 
 export class EntityExtractor {
-  /**
-   * Trích xuất các thực thể từ tin nhắn người dùng.
-   * Hoàn toàn Deterministic (0 Token LLM).
-   */
   public extract(text: string, msgId?: string, now: number = Date.now()): ExtractionResult {
     const entities: ExtractedEntity[] = [];
     const normalizedText = text.trim();
@@ -145,7 +139,6 @@ export class EntityExtractor {
     const addEntity = (ent: ExtractedEntity) => {
       if (!ent.name || !ent.value || ent.value.length < 2) return;
       if (seenNames.has(ent.name)) {
-        // Cùng tên entity: nối thêm hoặc cập nhật giá trị
         const existing = entities.find((e) => e.name === ent.name);
         if (existing && !existing.value.toLowerCase().includes(ent.value.toLowerCase())) {
           existing.value = `${existing.value}, ${ent.value}`;
@@ -204,7 +197,7 @@ export class EntityExtractor {
       }
     }
 
-    // 4. Dự án & Mục tiêu (Project & Goals)
+    // 4. Dự án & Mục tiêu (Project & Tasks / Goals)
     const projMatch = normalizedText.match(/(?:dự\s*án|project|sản\s*phẩm)\s*(?:này|của\s*tôi)?\s*(?:là|dùng|về)\s*([^,;!\?\n]{3,80})/i);
     if (projMatch && !isQuestion(normalizedText)) {
       const val = cleanValue(projMatch[1]);
@@ -213,7 +206,23 @@ export class EntityExtractor {
           name: 'project_description',
           value: val,
           category: 'project',
-          confidence: 0.8,
+          confidence: 0.85,
+          extractedAt: now,
+          sourceMsgId: msgId,
+        });
+      }
+    }
+
+    // 4.1 Nhiệm vụ & Mục tiêu hành động (Direct Tasks/Goals: "làm game tetris...", "viết app chat...")
+    const taskMatch = normalizedText.match(/^(?:hãy\s+)?(?:làm|xây\s*dựng|tạo|phát\s*triển|viết|code|build|make|develop|create)\s+([^,;!\?\n]{3,80})/i);
+    if (taskMatch && !isQuestion(normalizedText)) {
+      const val = cleanValue(taskMatch[1]);
+      if (val) {
+        addEntity({
+          name: 'current_goal',
+          value: val,
+          category: 'goal',
+          confidence: 0.9,
           extractedAt: now,
           sourceMsgId: msgId,
         });
@@ -252,14 +261,11 @@ export class EntityExtractor {
       }
     }
 
-    // 7. Tech Stack & State Transitions (Xử lý đa công nghệ chính xác)
-    // Nếu KHÔNG PHẢI là câu hỏi, quét các công nghệ được đề cập
+    // 7. Tech Stack & State Transitions
     if (!isQuestion(normalizedText)) {
-      // Nhận diện hành động chuyển đổi (ví dụ: chuyển từ React sang Vue)
       const transitionMatch = normalizedText.match(/(?:chuyển\s*sang|đổi\s*sang|nâng\s*cấp\s*lên|switched\s*to|migrated\s*to)\s+([^!?;:\n]{2,80})/i);
       const isTransition = Boolean(transitionMatch);
 
-      // Quét toàn bộ Tech Catalog
       for (const tech of TECH_CATALOG) {
         const match = normalizedText.match(tech.pattern);
         if (match) {
@@ -275,7 +281,6 @@ export class EntityExtractor {
         }
       }
 
-      // Xử lý cụm từ chỉ định chung: "stack của tôi là Next.js, Tailwind..."
       const generalStackMatch = normalizedText.match(/(?:(?:tôi|mình)\s*(?:đang\s*)?(?:dùng|xài|sử\s*dụng)|stack\s*(?:là|gồm)|dùng\s*thêm)\s+([^!?;:\n]{2,100})/i);
       if (generalStackMatch && entities.length === 0) {
         const items = splitMultiItems(generalStackMatch[1]);
@@ -298,7 +303,6 @@ export class EntityExtractor {
     };
   }
 
-  /** Trích xuất từ khóa cho Temporal History (loại bỏ Stopwords) */
   public extractKeywords(text: string): string[] {
     return text
       .toLowerCase()
@@ -308,8 +312,5 @@ export class EntityExtractor {
   }
 }
 
-export async function ensureNlp(): Promise<void> {
-  // Safe no-op / ready
-}
-
+export async function ensureNlp(): Promise<void> {}
 export const extractor = new EntityExtractor();
