@@ -42,6 +42,17 @@ function MessagesContent() {
     }
   }, [recipientId]);
 
+  // Auto-poll every 3 seconds so incoming messages & peers appear in real-time
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadPeers();
+      if (recipientId) {
+        loadChat(recipientId);
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [recipientId]);
+
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
@@ -49,6 +60,7 @@ function MessagesContent() {
   const loadPeers = async () => {
     try {
       const token = localStorage.getItem('token');
+      if (!token) return;
       const res = await fetch('/api/messages', {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -66,6 +78,7 @@ function MessagesContent() {
   const loadChat = async (peer: string) => {
     try {
       const token = localStorage.getItem('token');
+      if (!token) return;
       const res = await fetch(`/api/messages?peerId=${encodeURIComponent(peer)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -99,7 +112,10 @@ function MessagesContent() {
       });
       const data = await res.json();
       if (res.ok) {
-        setMessages((prev) => [...prev, data.message]);
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === data.message.id)) return prev;
+          return [...prev, data.message];
+        });
         setInputContent('');
         setFileAttachment(null);
         if (!peers.includes(recipientId.toUpperCase())) {
@@ -164,52 +180,54 @@ function MessagesContent() {
           </div>
         </div>
 
-        {/* Right: Message history & Chat input */}
-        <div className="md:col-span-2 flex flex-col bg-[#050505]">
+        {/* Right: Active Chat area */}
+        <div className="md:col-span-2 flex flex-col bg-[#080808]">
           {recipientId ? (
             <>
-              {/* Header */}
+              {/* Chat Header */}
               <div className="border-b border-[#1a1a1a] p-3 flex justify-between items-center">
-                <span className="text-xs font-mono text-white">Chat with: {recipientId}</span>
-                <span className="text-[10px] text-emerald-400 font-mono">● online</span>
+                <span className="text-xs font-mono text-[#aaa]">
+                  Chatting with: <strong className="text-white">{recipientId}</strong>
+                </span>
+                <span className="text-[10px] text-[#555] font-mono">15-char encrypted</span>
               </div>
 
-              {/* Message List */}
+              {/* Chat Messages */}
               <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-[360px]">
                 {messages.length === 0 ? (
-                  <p className="text-xs text-[#555] text-center my-12">No messages yet. Send the first message.</p>
+                  <p className="text-xs text-[#444] text-center py-10">No messages yet. Say hello!</p>
                 ) : (
                   messages.map((m) => {
                     const isMe = m.fromId === currentUserId;
                     return (
-                      <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                      <div
+                        key={m.id}
+                        className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                      >
                         <div
-                          className={`max-w-[80%] p-3 text-xs border ${
+                          className={`p-3 max-w-[80%] text-xs ${
                             isMe
-                              ? 'bg-[#111] border-[#222] text-[#ccc]'
-                              : 'bg-[#080808] border-[#1a1a1a] text-[#aaa]'
+                              ? 'bg-[#161616] text-white border border-[#222]'
+                              : 'bg-[#0f0f0f] text-[#ccc] border border-[#1a1a1a]'
                           }`}
                         >
-                          {m.content && <p className="leading-relaxed whitespace-pre-wrap">{m.content}</p>}
-                          {m.fileName && (
+                          <p className="whitespace-pre-wrap">{m.content}</p>
+
+                          {m.fileName && m.fileContent && (
                             <div className="mt-2 pt-2 border-t border-[#222] flex items-center justify-between gap-3">
-                              <span className="font-mono text-[10px] text-white truncate max-w-[150px]">
-                                📄 {m.fileName}
-                              </span>
-                              {m.fileContent && (
-                                <button
-                                  onClick={() => downloadFile(m.fileName!, m.fileContent!)}
-                                  className="text-[10px] border border-[#333] px-2 py-0.5 text-[#888] hover:text-white cursor-pointer"
-                                >
-                                  download
-                                </button>
-                              )}
+                              <span className="font-mono text-[11px] text-[#888] truncate">{m.fileName}</span>
+                              <button
+                                onClick={() => downloadFile(m.fileName!, m.fileContent!)}
+                                className="text-[10px] border border-[#333] px-2 py-1 text-[#aaa] hover:text-white transition-colors"
+                              >
+                                download .md
+                              </button>
                             </div>
                           )}
-                          <p className="text-[9px] text-[#444] mt-1 text-right">
-                            {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </p>
                         </div>
+                        <span className="text-[9px] text-[#444] mt-1 font-mono">
+                          {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
                       </div>
                     );
                   })
@@ -217,30 +235,32 @@ function MessagesContent() {
                 <div ref={chatBottomRef} />
               </div>
 
-              {/* Chat Input */}
-              <form onSubmit={handleSendMessage} className="border-t border-[#1a1a1a] p-3 space-y-2">
+              {/* Chat Input & .md upload */}
+              <form onSubmit={handleSendMessage} className="border-t border-[#1a1a1a] p-3 flex flex-col gap-2">
                 {fileAttachment && (
-                  <div className="flex justify-between items-center text-[10px] border border-[#222] bg-[#111] px-2 py-1">
-                    <span className="text-white font-mono truncate">Attached: {fileAttachment.name}</span>
+                  <div className="flex items-center justify-between bg-[#111] p-2 text-xs border border-[#222]">
+                    <span className="font-mono text-[11px] text-[#aaa]">Attached: {fileAttachment.name}</span>
                     <button
                       type="button"
                       onClick={() => setFileAttachment(null)}
-                      className="text-red-400 hover:text-red-300 ml-2 cursor-pointer"
+                      className="text-xs text-[#aa3333] hover:text-white"
                     >
                       remove
                     </button>
                   </div>
                 )}
+
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={inputContent}
                     onChange={(e) => setInputContent(e.target.value)}
-                    placeholder="Type encrypted message..."
+                    placeholder="type encrypted message..."
                     className="flex-1 text-xs"
                   />
-                  <label className="border border-[#333] px-3 py-1.5 text-xs text-[#888] hover:text-white hover:border-[#555] cursor-pointer flex items-center">
-                    <span>.md</span>
+
+                  <label className="text-xs border border-[#333] px-3 py-2 text-[#888] hover:text-white cursor-pointer transition-colors flex items-center">
+                    attach .md
                     <input
                       type="file"
                       accept=".md,.txt"
@@ -249,22 +269,27 @@ function MessagesContent() {
                         const file = e.target.files?.[0];
                         if (file) {
                           const reader = new FileReader();
-                          reader.onload = () =>
-                            setFileAttachment({ name: file.name, content: String(reader.result || '') });
+                          reader.onload = (ev) => {
+                            setFileAttachment({
+                              name: file.name,
+                              content: ev.target?.result as string,
+                            });
+                          };
                           reader.readAsText(file);
                         }
                       }}
                     />
                   </label>
-                  <button type="submit" className="primary px-4 cursor-pointer">
-                    Send
+
+                  <button type="submit" className="primary px-4 py-2 text-xs cursor-pointer">
+                    send
                   </button>
                 </div>
               </form>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-xs text-[#555]">
-              Select a conversation or enter a 15-character ID above to start chatting.
+            <div className="flex-1 flex items-center justify-center text-xs text-[#444]">
+              Select or enter a 15-char ID to begin messaging.
             </div>
           )}
         </div>
@@ -273,9 +298,9 @@ function MessagesContent() {
   );
 }
 
-export default function MessagesPage() {
+export default function Messages() {
   return (
-    <Suspense fallback={<div className="py-20 text-xs text-[#555]">Loading messages...</div>}>
+    <Suspense fallback={<div className="py-20 text-xs text-[#555] text-center">loading messages...</div>}>
       <MessagesContent />
     </Suspense>
   );
