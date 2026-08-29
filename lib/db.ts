@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { getCloudDocument, setCloudDocument } from './firebase-cloud';
 
 export interface User {
   userId: string; // 15-character uppercase ID (e.g. A1B2C3D4E5F6G7H)
@@ -28,20 +29,20 @@ export interface Message {
   createdAt: number;
 }
 
-// Global in-memory storage preserved across route invocations in server process
+// In-memory hot cache
 declare global {
-  var __void_users: Map<string, User> | undefined;
-  var __void_posts: Post[] | undefined;
-  var __void_messages: Message[] | undefined;
+  var __cached_users: Map<string, User> | undefined;
+  var __cached_posts: Post[] | undefined;
+  var __cached_messages: Message[] | undefined;
 }
 
-if (!global.__void_users) global.__void_users = new Map();
-if (!global.__void_posts) global.__void_posts = [];
-if (!global.__void_messages) global.__void_messages = [];
+if (!global.__cached_users) global.__cached_users = new Map();
+if (!global.__cached_posts) global.__cached_posts = [];
+if (!global.__cached_messages) global.__cached_messages = [];
 
-const usersStore = global.__void_users;
-const postsStore = global.__void_posts;
-const messagesStore = global.__void_messages;
+const usersCache = global.__cached_users;
+let postsCache = global.__cached_posts;
+let messagesCache = global.__cached_messages;
 
 // Helper: Mask 15-char ID for public display (e.g. A1B2...G7H)
 export function maskId(id: string): string {
@@ -61,37 +62,55 @@ export function generate15CharId(): string {
 }
 
 // -------------------------------------------------------------
-// USER OPERATIONS (100% Stable & Instant)
+// USER OPERATIONS (100% Shared Cloud Persistence)
 // -------------------------------------------------------------
 export async function getUser(userId: string): Promise<User | null> {
   const cleanId = String(userId).trim().toUpperCase();
-  return usersStore.get(cleanId) || null;
+  if (usersCache.has(cleanId)) {
+    return usersCache.get(cleanId)!;
+  }
+
+  const cloudUsers = await getCloudDocument<Record<string, User>>('users_table');
+  if (cloudUsers && cloudUsers[cleanId]) {
+    usersCache.set(cleanId, cloudUsers[cleanId]);
+    return cloudUsers[cleanId];
+  }
+
+  return null;
 }
 
 export async function saveUser(user: User): Promise<void> {
   const cleanId = String(user.userId).trim().toUpperCase();
-  usersStore.set(cleanId, user);
+  usersCache.set(cleanId, user);
+
+  const cloudUsers = (await getCloudDocument<Record<string, User>>('users_table')) || {};
+  cloudUsers[cleanId] = user;
+  await setCloudDocument('users_table', cloudUsers);
 }
 
 // -------------------------------------------------------------
-// POST OPERATIONS (100% Stable & Instant)
+// POST OPERATIONS (100% Shared Cloud Persistence)
 // -------------------------------------------------------------
 export async function savePost(post: Post): Promise<void> {
-  // Check if already exists to avoid duplicate
-  const idx = postsStore.findIndex((p) => p.id === post.id);
+  const cloudPosts = (await getCloudDocument<Post[]>('posts_table')) || [];
+  const idx = cloudPosts.findIndex((p) => p.id === post.id);
   if (idx >= 0) {
-    postsStore[idx] = post;
+    cloudPosts[idx] = post;
   } else {
-    postsStore.unshift(post);
+    cloudPosts.unshift(post);
   }
+  postsCache = cloudPosts;
+  await setCloudDocument('posts_table', cloudPosts);
 }
 
 export async function getPost(postId: string): Promise<Post | null> {
-  return postsStore.find((p) => p.id === postId) || null;
+  const cloudPosts = (await getCloudDocument<Post[]>('posts_table')) || postsCache;
+  return cloudPosts.find((p) => p.id === postId) || null;
 }
 
 export async function listPosts(page: number = 1, limitPerPage: number = 20): Promise<{ posts: Post[]; total: number; totalPages: number }> {
-  const sorted = [...postsStore].sort((a, b) => b.createdAt - a.createdAt);
+  const cloudPosts = (await getCloudDocument<Post[]>('posts_table')) || postsCache;
+  const sorted = [...cloudPosts].sort((a, b) => b.createdAt - a.createdAt);
   const total = sorted.length;
   const totalPages = Math.ceil(total / limitPerPage) || 1;
   const start = (page - 1) * limitPerPage;
@@ -100,7 +119,7 @@ export async function listPosts(page: number = 1, limitPerPage: number = 20): Pr
 }
 
 // -------------------------------------------------------------
-// MESSAGE OPERATIONS (100% Stable & Instant 2-Way Sync)
+// MESSAGE OPERATIONS (100% Shared Cloud Persistence & 2-Way Realtime)
 // -------------------------------------------------------------
 export async function saveMessage(msg: Message): Promise<void> {
   const cleanMsg: Message = {
@@ -108,12 +127,17 @@ export async function saveMessage(msg: Message): Promise<void> {
     fromId: msg.fromId.trim().toUpperCase(),
     toId: msg.toId.trim().toUpperCase(),
   };
-  messagesStore.push(cleanMsg);
+
+  const cloudMessages = (await getCloudDocument<Message[]>('messages_table')) || [];
+  cloudMessages.push(cleanMsg);
+  messagesCache = cloudMessages;
+  await setCloudDocument('messages_table', cloudMessages);
 }
 
 export async function listMessages(userId: string): Promise<Message[]> {
   const cleanUserId = String(userId).trim().toUpperCase();
-  return messagesStore.filter(
+  const cloudMessages = (await getCloudDocument<Message[]>('messages_table')) || messagesCache;
+  return cloudMessages.filter(
     (m) => m.fromId === cleanUserId || m.toId === cleanUserId
   );
 }
