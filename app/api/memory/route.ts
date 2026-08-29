@@ -1,36 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { EntityExtractor } from '@/lib/zero-mem/extractor';
-import { ZeroMemStore } from '@/lib/zero-mem/memory-store';
+import { ZeroMemStore, type MemorySnapshot } from '@/lib/zero-mem/memory-store';
+import { getCloudDocument, setCloudDocument } from '@/lib/firebase-cloud';
 
 // Server-side in-memory cache theo namespace
 const serverStores = new Map<string, ZeroMemStore>();
 const extractor = new EntityExtractor();
 
-function getStore(ns: string): ZeroMemStore {
+async function getStoreForNamespace(ns: string): Promise<ZeroMemStore> {
   let store = serverStores.get(ns);
   if (!store) {
     store = new ZeroMemStore();
+    // Load persisted snapshot from Firebase Cloud
+    const cloudSnapshot = await getCloudDocument<MemorySnapshot>(`memory_ns_${ns}`);
+    if (cloudSnapshot) {
+      store.hydrate(cloudSnapshot);
+    }
     serverStores.set(ns, store);
   }
   return store;
 }
 
+async function persistStoreForNamespace(ns: string, store: ZeroMemStore): Promise<void> {
+  const snapshot = store.exportSnapshot();
+  await setCloudDocument(`memory_ns_${ns}`, snapshot);
+}
+
 /**
- * Universal Zero-Mem REST API
- * Dùng cho bất kỳ Agent, tool (fx.sh, curl, Python, Node.js, LangChain, Custom Bot...)
- * 
- * 1. POST /api/memory
- *    - Remember: { "action": "remember", "text": "Tôi dùng Next.js 15", "namespace": "default" }
- *    - Recall:   { "action": "recall", "query": "stack của tôi", "k": 8, "namespace": "default" }
- * 
- * 2. GET /api/memory?namespace=default
- *    - Inspect:  Lấy toàn bộ thực thể trong namespace
+ * Universal Zero-Mem REST API (with 100% Cloud Persistence)
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { action, text, query, k = 8, namespace = 'default' } = body;
-    const store = getStore(namespace);
+    const cleanNs = String(namespace).trim();
+    const store = await getStoreForNamespace(cleanNs);
     const now = Date.now();
 
     if (action === 'remember') {
@@ -55,9 +59,12 @@ export async function POST(req: NextRequest) {
       }
       store.logSession(`api-${new Date(now).toISOString().slice(0, 10)}`, sessionKeywords, now);
 
+      // Persist to Cloud Firestore
+      await persistStoreForNamespace(cleanNs, store);
+
       return NextResponse.json({
         success: true,
-        namespace,
+        namespace: cleanNs,
         extractedCount: entities.length,
         entities,
         changes,
@@ -70,10 +77,16 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Thiếu trường query' }, { status: 400 });
       }
 
+      // Ensure freshest cloud snapshot is hydrated
+      const cloudSnapshot = await getCloudDocument<MemorySnapshot>(`memory_ns_${cleanNs}`);
+      if (cloudSnapshot) {
+        store.hydrate(cloudSnapshot);
+      }
+
       const relevant = store.searchRelevant(query, Number(k) || 8);
       return NextResponse.json({
         success: true,
-        namespace,
+        namespace: cleanNs,
         query,
         count: relevant.length,
         relevant,
@@ -95,11 +108,17 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const namespace = searchParams.get('namespace') || 'default';
-    const store = getStore(namespace);
+    const cleanNs = String(namespace).trim();
+    const store = await getStoreForNamespace(cleanNs);
+
+    const cloudSnapshot = await getCloudDocument<MemorySnapshot>(`memory_ns_${cleanNs}`);
+    if (cloudSnapshot) {
+      store.hydrate(cloudSnapshot);
+    }
 
     return NextResponse.json({
       success: true,
-      namespace,
+      namespace: cleanNs,
       stats: store.stats(),
       entities: store.getAllEntities(),
     });
