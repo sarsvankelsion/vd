@@ -18,6 +18,7 @@ export default function MemoryInspector() {
   const memoryVersion = useApp((s) => s.memoryVersion);
   const updateEntity = useApp((s) => s.updateEntity);
   const deleteEntity = useApp((s) => s.deleteEntity);
+  const currentUserId = useApp((s) => s.currentUserId);
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -46,195 +47,209 @@ export default function MemoryInspector() {
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim() || !newValue.trim()) return;
+    const cleanName = newName.trim().toLowerCase().replace(/\s+/g, '_');
+    const cleanVal = newValue.trim();
+
     getMemoryStore().upsertEntity({
-      name: newName.trim().toLowerCase().replace(/\s+/g, '_'),
-      value: newValue.trim(),
+      name: cleanName,
+      value: cleanVal,
       category: newCat,
       confidence: 1.0,
       extractedAt: Date.now(),
     });
+
+    const ns = currentUserId || 'default';
+    void fetch('/api/memory', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'remember',
+        text: `${cleanName}: ${cleanVal}`,
+        namespace: ns,
+      }),
+    });
+
     setNewName('');
     setNewValue('');
     setShowAdd(false);
     useApp.setState({ memoryVersion: Date.now() });
   };
 
+  const handleSaveEdit = (name: string) => {
+    if (!editValue.trim()) return;
+    void updateEntity(name, editValue);
+    setEditing(null);
+    setEditValue('');
+  };
+
   return (
     <div className="space-y-6">
-      {/* Top Header / Meta */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-[#1a1a1a] pb-4">
+      {/* Header Info */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#1a1a1a] pb-4">
         <div>
-          <p className="text-xs text-[#555] mb-1 uppercase tracking-[0.2em]">01 / MEMORY GRAPH</p>
-          <h2 className="text-lg font-medium tracking-tight text-white">Đồ thị thực thể (RAM-First)</h2>
-          <p className="text-xs text-[#666] mt-0.5">
-            Toàn bộ trí nhớ dài hạn được lưu giữ trong RAM client · Đọc đúng 1 lần từ Firestore khi mở web.
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-medium text-white">Entity-Context Knowledge Graph</h2>
+            {currentUserId && (
+              <span className="text-[10px] font-mono border border-[#222] bg-[#0a0a0a] px-2 py-0.5 text-[#888]">
+                ID: {currentUserId}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-[#555] mt-0.5">
+            Trí nhớ được lưu trữ & hiệu chỉnh trực tiếp trên RAM và đồng bộ đám mây Firebase.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-[11px] font-mono text-[#666]">
-          <span className="border border-[#1a1a1a] px-2.5 py-1 bg-[#0a0a0a]">
-            {stats.entities} entities
-          </span>
-          <span className="border border-[#1a1a1a] px-2.5 py-1 bg-[#0a0a0a] text-[#888]">
-            {stats.readsPerformed} read / session
-          </span>
-          <span className="border border-[#1a1a1a] px-2.5 py-1 bg-[#0a0a0a] text-emerald-400">
-            0 token management
-          </span>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowAdd(!showAdd)}
+            className="text-xs border border-[#333] px-3 py-1.5 text-[#888] hover:text-white hover:border-[#555] transition cursor-pointer"
+          >
+            {showAdd ? 'hủy' : '+ thêm thực thể'}
+          </button>
         </div>
       </div>
 
-      {/* Toolbar: Search + Add */}
-      <div className="flex items-center gap-3">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Tìm kiếm thực thể theo tên, giá trị, danh mục..."
-          className="flex-1 border border-[#1a1a1a] bg-[#050505] px-3.5 py-2 text-xs text-[#ccc] placeholder-[#444] outline-none transition-colors focus:border-[#333]"
-        />
-        <button
-          onClick={() => setShowAdd(!showAdd)}
-          className="border border-[#333] px-3.5 py-2 text-xs text-[#888] hover:border-[#666] hover:text-white transition-all whitespace-nowrap"
-        >
-          {showAdd ? 'Đóng' : '+ Thêm thủ công'}
-        </button>
-      </div>
-
-      {/* Form thêm mới */}
+      {/* Form thêm thực thể */}
       {showAdd && (
         <form onSubmit={handleAdd} className="border border-[#1a1a1a] bg-[#080808] p-4 space-y-3">
-          <p className="text-xs text-white font-medium">Thêm thực thể mới vào RAM</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <p className="text-xs font-mono text-white">Thêm thực thể mới vào bộ nhớ</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <input
               type="text"
-              required
+              placeholder="Tên (vd: tech_stack)"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="Tên thực thể (vd: tech_stack)"
-              className="border border-[#1a1a1a] bg-[#050505] px-3 py-1.5 text-xs text-[#ccc] outline-none focus:border-[#444]"
+              className="text-xs"
+              required
             />
             <input
               type="text"
-              required
+              placeholder="Giá trị (vd: Next.js 15)"
               value={newValue}
               onChange={(e) => setNewValue(e.target.value)}
-              placeholder="Giá trị (vd: Next.js 15, Tailwind)"
-              className="border border-[#1a1a1a] bg-[#050505] px-3 py-1.5 text-xs text-[#ccc] outline-none focus:border-[#444]"
+              className="text-xs"
+              required
             />
             <select
               value={newCat}
               onChange={(e) => setNewCat(e.target.value as any)}
-              className="border border-[#1a1a1a] bg-[#050505] px-3 py-1.5 text-xs text-[#888] outline-none focus:border-[#444]"
+              className="text-xs bg-[#0a0a0a] border border-[#222] text-[#888] px-3 py-2"
             >
               <option value="tech_stack">tech_stack</option>
               <option value="profile">profile</option>
               <option value="preference">preference</option>
-              <option value="project">project</option>
               <option value="instruction">instruction</option>
-              <option value="fact">fact</option>
+              <option value="constraint">constraint</option>
             </select>
           </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => setShowAdd(false)}
-              className="px-3 py-1 text-xs text-[#555] hover:text-[#888]"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              className="bg-white px-4 py-1 text-xs font-medium text-black hover:opacity-90"
-            >
-              Lưu vào RAM
-            </button>
-          </div>
+          <button type="submit" className="primary text-xs px-4 py-2 cursor-pointer">
+            Lưu vào RAM
+          </button>
         </form>
       )}
 
-      {/* Entity List (Minimalist Cards / Table) */}
-      <div className="space-y-px">
+      {/* Stats Bar */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="border border-[#141414] bg-[#070707] p-3">
+          <div className="text-[10px] font-mono text-[#555]">TỔNG THỰC THỂ</div>
+          <div className="text-lg font-light text-white font-mono">{stats.entities}</div>
+        </div>
+        <div className="border border-[#141414] bg-[#070707] p-3">
+          <div className="text-[10px] font-mono text-emerald-500">TOKEN TIẾT KIỆM</div>
+          <div className="text-lg font-light text-emerald-400 font-mono">~{stats.tokensSavedEstimate}</div>
+        </div>
+        <div className="border border-[#141414] bg-[#070707] p-3">
+          <div className="text-[10px] font-mono text-cyan-500">THAO TÁC 0-TOKEN</div>
+          <div className="text-lg font-light text-cyan-400 font-mono">{stats.zeroTokenOps}</div>
+        </div>
+        <div className="border border-[#141414] bg-[#070707] p-3">
+          <div className="text-[10px] font-mono text-[#555]">ĐỌC CLOUD TRONG PHIÊN</div>
+          <div className="text-lg font-light text-white font-mono">{stats.readsPerformed} (1-read)</div>
+        </div>
+      </div>
+
+      {/* Search Input */}
+      <div>
+        <input
+          type="text"
+          placeholder="tìm kiếm thực thể trong bộ nhớ..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="text-xs w-full"
+        />
+      </div>
+
+      {/* Entities Table */}
+      <div className="border border-[#1a1a1a]">
         {entities.length === 0 ? (
-          <div className="border border-[#1a1a1a] p-8 text-center">
-            <p className="text-xs text-[#555]">
-              {query ? `Không tìm thấy thực thể nào khớp với "${query}"` : 'Bộ nhớ hiện đang trống. Hãy thêm thực thể hoặc chạy kiểm thử bên tab Tester.'}
-            </p>
+          <div className="py-12 text-center text-xs text-[#555]">
+            Chưa có thực thể nào trong bộ nhớ. Hãy dùng tab <strong>02 / benchmark tester</strong> hoặc bấm nút <strong>+ thêm thực thể</strong> ở trên!
           </div>
         ) : (
-          entities.map((ent, idx) => (
-            <div
-              key={ent.name}
-              className={`border border-[#1a1a1a] p-4 transition-colors hover:border-[#262626] bg-[#050505] ${
-                idx > 0 ? 'border-t-0' : ''
-              }`}
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-baseline gap-3">
-                  <span className="font-mono text-[11px] text-[#444]">
-                    {String(idx + 1).padStart(2, '0')}
-                  </span>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-medium text-white">{ent.name}</span>
-                      <span className="text-[10px] text-[#555] font-mono border border-[#1a1a1a] px-1.5 py-0.2">
-                        [{ent.category}]
-                      </span>
-                    </div>
-                    {editing === ent.name ? (
-                      <div className="mt-2 flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          className="border border-[#333] bg-[#0a0a0a] px-2 py-1 text-xs text-[#ccc] outline-none"
-                        />
-                        <button
-                          onClick={() => {
-                            updateEntity(ent.name, editValue);
-                            setEditing(null);
-                          }}
-                          className="bg-white px-2.5 py-1 text-[11px] text-black font-medium"
-                        >
-                          Lưu
-                        </button>
-                        <button
-                          onClick={() => setEditing(null)}
-                          className="text-[11px] text-[#555] hover:text-[#888] px-1"
-                        >
-                          Hủy
-                        </button>
-                      </div>
-                    ) : (
-                      <p className="mt-1 text-xs text-[#999] leading-relaxed break-words">{ent.value}</p>
-                    )}
+          <div className="divide-y divide-[#141414]">
+            {entities.map((e) => (
+              <div key={e.name} className="p-3.5 hover:bg-[#080808] transition flex items-center justify-between gap-4">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-medium text-white">{e.name}</span>
+                    <span className="text-[10px] font-mono text-[#555] border border-[#1a1a1a] px-1.5 py-0.5">
+                      {e.category}
+                    </span>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-3 self-end sm:self-center text-[11px]">
-                  <span className="text-[#444] text-[10px] font-mono">{timeAgo(ent.updated_at)}</span>
-                  {editing !== ent.name && (
-                    <>
+                  {editing === e.name ? (
+                    <div className="flex gap-2 pt-1">
+                      <input
+                        type="text"
+                        value={editValue}
+                        onChange={(ev) => setEditValue(ev.target.value)}
+                        className="text-xs flex-1 py-1"
+                        autoFocus
+                      />
                       <button
-                        onClick={() => {
-                          setEditing(ent.name);
-                          setEditValue(ent.value);
-                        }}
-                        className="text-[#666] hover:text-[#ccc] transition-colors"
+                        onClick={() => handleSaveEdit(e.name)}
+                        className="text-xs bg-white text-black px-3 py-1 font-medium"
                       >
-                        sửa
+                        Lưu
                       </button>
                       <button
-                        onClick={() => deleteEntity(ent.name)}
-                        className="text-[#555] hover:text-red-400 transition-colors"
+                        onClick={() => setEditing(null)}
+                        className="text-xs border border-[#333] px-3 py-1 text-[#888]"
                       >
-                        xóa
+                        Hủy
                       </button>
-                    </>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#aaa] font-mono break-all">{e.value}</p>
                   )}
                 </div>
+
+                <div className="shrink-0 flex items-center gap-3">
+                  <span className="text-[10px] text-[#444] font-mono hidden sm:inline">
+                    {timeAgo(e.updated_at)}
+                  </span>
+                  {editing !== e.name && (
+                    <button
+                      onClick={() => {
+                        setEditing(e.name);
+                        setEditValue(e.value);
+                      }}
+                      className="text-[11px] text-[#666] hover:text-white transition"
+                    >
+                      sửa
+                    </button>
+                  )}
+                  <button
+                    onClick={() => void deleteEntity(e.name)}
+                    className="text-[11px] text-[#aa3333] hover:text-[#ff5555] transition"
+                  >
+                    xóa
+                  </button>
+                </div>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
     </div>

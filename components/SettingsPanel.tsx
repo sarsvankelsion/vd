@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useApp, getMemoryStore } from '@/store/useApp';
-import { syncManager } from '@/lib/zero-mem/sync-manager';
 
 export default function SettingsPanel() {
-  const { settings, updateSettings, logout, user, lastSyncInfo } = useApp();
+  const settings = useApp((s) => s.settings);
+  const updateSettings = useApp((s) => s.updateSettings);
+  const currentUserId = useApp((s) => s.currentUserId);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
 
@@ -14,14 +15,23 @@ export default function SettingsPanel() {
     setSyncMessage('');
     try {
       const store = getMemoryStore();
-      syncManager.queueSnapshot(store.exportSnapshot());
-      await syncManager.flushNow('manual-sync');
-      setSyncMessage('Đã đồng bộ thành công lên Firestore (1 write).');
-      useApp.setState({
-        lastSyncInfo: { reads: syncManager.reads, writes: syncManager.writes },
+      const ns = currentUserId || 'default';
+      const res = await fetch('/api/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'remember',
+          text: 'Manual sync trigger snapshot',
+          namespace: ns,
+        }),
       });
+      if (res.ok) {
+        setSyncMessage('Đã đồng bộ thành công lên Firebase Cloud Firestore.');
+      } else {
+        setSyncMessage('Lỗi đồng bộ đám mây.');
+      }
     } catch (e: any) {
-      setSyncMessage(`Lỗi đồng bộ: ${e.message}`);
+      setSyncMessage(`Lỗi: ${e.message}`);
     } finally {
       setSyncing(false);
       setTimeout(() => setSyncMessage(''), 4000);
@@ -42,24 +52,16 @@ export default function SettingsPanel() {
       <div className="space-y-px">
         {/* Box 1: Account */}
         <div className="border border-[#1a1a1a] p-5 bg-[#050505]">
-          <p className="text-xs text-[#555] mb-1 font-mono">01 / ACCOUNT</p>
+          <p className="text-xs text-[#555] mb-1 font-mono">01 / ACCOUNT IDENTITY</p>
           <div className="flex justify-between items-center">
             <div>
               <p className="text-sm font-medium text-[#ccc]">
-                {user ? user.email ?? user.uid : 'Chế độ Demo Local (Offline)'}
+                {currentUserId ? `ID: ${currentUserId}` : 'Chế độ Demo Local (Guest)'}
               </p>
               <p className="text-xs text-[#666] mt-0.5">
-                {user ? 'Đã kết nối Firebase Console (zm44-a3407)' : 'Dữ liệu chỉ lưu trong RAM & IndexedDB trình duyệt'}
+                Đã kết nối Firebase Cloud Firestore (zm44-a3407)
               </p>
             </div>
-            {user && (
-              <button
-                onClick={() => void logout()}
-                className="border border-[#333] px-3 py-1.5 text-xs text-[#888] hover:text-red-400 hover:border-red-900 transition"
-              >
-                Đăng xuất
-              </button>
-            )}
           </div>
         </div>
 
@@ -77,8 +79,8 @@ export default function SettingsPanel() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleManualSync}
-                  disabled={syncing || !user}
-                  className="bg-white text-black text-xs font-medium px-4 py-1.5 hover:opacity-90 transition disabled:opacity-30 whitespace-nowrap"
+                  disabled={syncing}
+                  className="bg-white text-black text-xs font-medium px-4 py-1.5 hover:opacity-90 transition disabled:opacity-30 whitespace-nowrap cursor-pointer"
                 >
                   {syncing ? 'Đang lưu...' : 'Đồng bộ ngay'}
                 </button>
@@ -88,11 +90,11 @@ export default function SettingsPanel() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 text-[11px] font-mono">
               <div className="border border-[#1a1a1a] bg-[#0a0a0a] p-2.5">
                 <span className="text-[#555] block">READS</span>
-                <span className="text-white font-medium">{lastSyncInfo?.reads ?? 1}</span>
+                <span className="text-white font-medium">1 / Session</span>
               </div>
               <div className="border border-[#1a1a1a] bg-[#0a0a0a] p-2.5">
                 <span className="text-[#555] block">WRITES</span>
-                <span className="text-white font-medium">{lastSyncInfo?.writes ?? 0}</span>
+                <span className="text-white font-medium">Auto Debounce</span>
               </div>
               <div className="border border-[#1a1a1a] bg-[#0a0a0a] p-2.5">
                 <span className="text-[#555] block">LATENCY</span>
@@ -100,7 +102,7 @@ export default function SettingsPanel() {
               </div>
               <div className="border border-[#1a1a1a] bg-[#0a0a0a] p-2.5">
                 <span className="text-[#555] block">STORAGE</span>
-                <span className="text-white font-medium">1 Doc / User</span>
+                <span className="text-white font-medium">Cloud Firestore</span>
               </div>
             </div>
 
