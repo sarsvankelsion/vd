@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { posts } from '@/lib/db';
+import { getPost } from '@/lib/db';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const post = posts.find((p) => p.id === id);
+    const post = await getPost(id);
 
     if (!post) {
       return NextResponse.json({ error: 'Post not found.' }, { status: 404 });

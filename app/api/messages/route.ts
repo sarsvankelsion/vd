@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
-import { messages } from '@/lib/db';
+import { saveMessage, listMessages } from '@/lib/db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'void-secret-key-2026';
 
@@ -24,16 +24,18 @@ export async function GET(req: NextRequest) {
     const peerId = searchParams.get('peerId')?.toUpperCase() || '';
     const currentUserId = decoded.userId.toUpperCase();
 
+    const userMessages = await listMessages(currentUserId);
+
     if (!peerId) {
       const peers = new Set<string>();
-      for (const m of messages) {
-        if (m.fromId === currentUserId) peers.add(m.toId);
-        if (m.toId === currentUserId) peers.add(m.fromId);
+      for (const m of userMessages) {
+        if (m.fromId === currentUserId && m.toId) peers.add(m.toId);
+        if (m.toId === currentUserId && m.fromId) peers.add(m.fromId);
       }
       return NextResponse.json({ peers: Array.from(peers) });
     }
 
-    const chat = messages.filter(
+    const chat = userMessages.filter(
       (m) =>
         (m.fromId === currentUserId && m.toId === peerId) ||
         (m.fromId === peerId && m.toId === currentUserId)
@@ -77,7 +79,7 @@ export async function POST(req: NextRequest) {
       createdAt: Date.now(),
     };
 
-    messages.push(newMsg);
+    await saveMessage(newMsg);
 
     return NextResponse.json({ success: true, message: newMsg });
   } catch (error: any) {

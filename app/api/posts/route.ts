@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
-import { posts, maskId } from '@/lib/db';
+import { savePost, listPosts, maskId } from '@/lib/db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'void-secret-key-2026';
 
@@ -9,26 +9,21 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const limit = 10;
-    const total = posts.length;
-    const totalPages = Math.ceil(total / limit) || 1;
 
-    const start = (page - 1) * limit;
-    const paginated = posts
-      .slice()
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(start, start + limit)
-      .map((p) => ({
-        id: p.id,
-        title: p.title,
-        preview: p.preview,
-        authorId: p.authorId,
-        authorMasked: p.authorMasked,
-        hasPassword: p.hasPassword,
-        createdAt: p.createdAt,
-      }));
+    const { posts, total, totalPages } = await listPosts(page, limit);
+
+    const safePosts = posts.map((p) => ({
+      id: p.id,
+      title: p.title,
+      preview: p.preview,
+      authorId: p.authorId,
+      authorMasked: p.authorMasked,
+      hasPassword: p.hasPassword,
+      createdAt: p.createdAt,
+    }));
 
     return NextResponse.json({
-      posts: paginated,
+      posts: safePosts,
       page,
       totalPages,
       total,
@@ -73,7 +68,7 @@ export async function POST(req: NextRequest) {
       createdAt: Date.now(),
     };
 
-    posts.unshift(newPost);
+    await savePost(newPost);
 
     return NextResponse.json({ success: true, post: newPost });
   } catch (error: any) {

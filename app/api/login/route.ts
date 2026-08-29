@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { users } from '@/lib/db';
+import { getUser } from '@/lib/db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'void-secret-key-2026';
 
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     }
 
     const cleanId = String(userId).trim().toUpperCase();
-    const user = users.get(cleanId);
+    const user = await getUser(cleanId);
 
     if (!user) {
       return NextResponse.json({ error: 'Invalid 15-char ID or password.' }, { status: 401 });

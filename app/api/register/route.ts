@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { users, generate15CharId } from '@/lib/db';
+import { getUser, saveUser, generate15CharId } from '@/lib/db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'void-secret-key-2026';
 
@@ -14,13 +14,15 @@ export async function POST(req: NextRequest) {
     }
 
     let userId = generate15CharId();
-    while (users.has(userId)) {
+    let existing = await getUser(userId);
+    while (existing) {
       userId = generate15CharId();
+      existing = await getUser(userId);
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
     const user = { userId, passwordHash, createdAt: Date.now() };
-    users.set(userId, user);
+    await saveUser(user);
 
     const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '30d' });
 
